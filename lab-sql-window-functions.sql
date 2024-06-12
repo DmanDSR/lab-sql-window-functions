@@ -7,6 +7,12 @@ SELECT title, length, RANK() OVER(partition by length ORDER BY title) 'Ranks'
 FROM film
 WHERE length != null or length != 0;
 
+-- fixed code
+
+SELECT title, length, RANK() OVER (ORDER BY length DESC, title) as 'Ranks'
+FROM film
+WHERE length IS NOT NULL AND length != 0;
+
 -- Rank films by length within the rating category and create an output table 
 -- that includes the title, length, rating and rank columns only. Filter out any rows 
 -- with null or zero values in the length column.
@@ -14,6 +20,12 @@ WHERE length != null or length != 0;
 SELECT title, length, rating, RANK() OVER(partition by length ORDER BY rating) as 'ranks'
 FROM film
 WHERE length != null or length != 0;
+
+-- fixed code
+
+SELECT title, length, rating, RANK() OVER (PARTITION BY rating ORDER BY length DESC) as 'ranks'
+FROM film
+WHERE length IS NOT NULL AND length != 0;
 
 -- Produce a list that shows for each film in the Sakila database, the actor 
 -- or actress who has acted in the greatest number of films, as well as the total 
@@ -87,6 +99,8 @@ FROM
     film_actor_ranks) x
 WHERE
   film_actor_rank = 1;
+  
+  
 
 -- Challenge 2
 
