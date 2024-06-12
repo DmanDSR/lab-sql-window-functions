@@ -34,10 +34,11 @@ ORDER BY 'Number of films' desc;
 SELECT title, film_id, actor_id
 from film
 */ 
-CREATE TEMPORARY TABLE actor_film_coun
+CREATE TEMPORARY TABLE actor_film_counts
 SELECT actor_id, COUNT(*) AS film_count
 FROM film_actor
 GROUP BY actor_id;
+
 
 CREATE VIEW film_actor_ranks AS
 WITH actor_ranks AS (
@@ -45,8 +46,11 @@ WITH actor_ranks AS (
     actor_id,
     film_count,
     RANK() OVER (ORDER BY film_count DESC) as actor_rank
-  FROM
-    actor_film_coun)
+  FROM (
+	SELECT actor_id, COUNT(*) AS film_count
+	FROM film_actor
+	GROUP BY actor_id) as actor_film_counts
+    )
 SELECT
   f.film_id,
   f.title,
@@ -84,3 +88,102 @@ FROM
 WHERE
   film_actor_rank = 1;
 
+-- Challenge 2
+
+-- Step 1. Retrieve the number of monthly active customers, i.e., the number of unique customers
+--  who rented a movie in each month.
+
+select monthname(rental_date) as month, count(distinct customer_id) as num_of_customer
+from rental
+group by monthname(rental_date);
+
+-- Step 2. Retrieve the number of active users in the previous month.
+
+SELECT 
+  m.month, 
+  COUNT(DISTINCT m.customer_id) AS current_month_customers, 
+  COALESCE(pm.prev_month_customers, 0) AS previous_month_customers
+FROM 
+  (
+    SELECT 
+      MONTHNAME(rental_date) AS month, 
+      customer_id
+    FROM 
+      rental
+  ) AS m
+  LEFT JOIN 
+  (
+    SELECT 
+      MONTHNAME(m.rental_date) AS month, 
+      COUNT(DISTINCT m.customer_id) AS prev_month_customers
+    FROM 
+      (
+        SELECT 
+          DATE_SUB(r.rental_date, INTERVAL 1 MONTH) AS rental_date, 
+          r.customer_id
+        FROM 
+          rental r
+      ) AS m
+    GROUP BY 
+      MONTHNAME(m.rental_date)
+  ) AS pm
+  ON m.month = pm.month
+GROUP BY 
+  m.month, pm.prev_month_customers
+ORDER BY 
+  m.month;
+  
+  
+-- Step 3. Calculate the percentage change in the number of active customers between the current 
+-- and previous month.
+
+WITH monthly_customers AS (
+  SELECT 
+    MONTHNAME(rental_date) AS month, 
+    COUNT(DISTINCT customer_id) AS current_month_customers
+  FROM 
+    rental
+  GROUP BY 
+    MONTHNAME(rental_date)
+)
+SELECT 
+  month, 
+  current_month_customers, 
+  LAG(current_month_customers) OVER (ORDER BY month ASC) AS previous_month_customers,
+  (current_month_customers - LAG(current_month_customers) OVER (ORDER BY month ASC)) / LAG(current_month_customers) OVER (ORDER BY month ASC) * 100 AS percentage_change
+FROM 
+  monthly_customers
+ORDER BY 
+  month;
+
+-- Step 4. Calculate the number of retained customers every month, i.e., customers who rented 
+-- movies in the current and previous months.
+
+WITH monthly_customers AS (
+  SELECT 
+    MONTHNAME(rental_date) AS month, 
+    customer_id
+  FROM 
+    rental
+  GROUP BY 
+    MONTHNAME(rental_date), customer_id
+),
+previous_month_customers AS (
+  SELECT 
+    MONTHNAME(DATE_SUB(r.rental_date, INTERVAL 1 MONTH)) AS month, 
+    r.customer_id
+  FROM 
+    rental r
+  GROUP BY 
+    MONTHNAME(DATE_SUB(r.rental_date, INTERVAL 1 MONTH)), r.customer_id
+)
+SELECT 
+  m.month, 
+  COUNT(DISTINCT m.customer_id) AS retained_customers
+FROM 
+  monthly_customers m
+  JOIN previous_month_customers pm ON m.month = pm.month AND m.customer_id = pm.customer_id
+GROUP BY 
+  m.month
+ORDER BY 
+  m.month;
